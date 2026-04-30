@@ -1,0 +1,72 @@
+name: Coinglass Auto Collector
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        pip install playwright openpyxl filelock requests
+        playwright install chromium
+        playwright install-deps
+    
+    - name: Create Excel if not exists
+      run: |
+        if [ ! -f "Trading_Journal.xlsx" ]; then
+          python -c "from openpyxl import Workbook; Workbook().save('Trading_Journal.xlsx')"
+        fi
+    
+    - name: Run Collector Part 1
+      run: python coinglass_collector_part1.py
+      
+    - name: Wait
+      run: sleep 120
+    
+    - name: Run Collector Part 2
+      run: python coinglass_collector_part2.py
+      
+    - name: Wait
+      run: sleep 120
+    
+    - name: Run Collector Part 3
+      run: python coinglass_collector_part3.py
+      
+    - name: Wait
+      run: sleep 120
+    
+    - name: Run Collector Part 4
+      run: python coinglass_collector_part4.py
+    
+    - name: Run Analysis
+      run: python swing_checker.py
+    
+    - name: Upload Results
+      uses: actions/upload-artifact@v3
+      with:
+        name: trading-data
+        path: |
+          Trading_Journal.xlsx
+          swing_candidates.xlsx
+    
+    - name: Commit Results
+      run: |
+        git config user.name "Auto Collector Bot"
+        git config user.email "bot@github.com"
+        git add *.xlsx
+        git diff --staged --quiet || git commit -m "📊 Auto update $(date)"
+        git push
+      continue-on-error: true
